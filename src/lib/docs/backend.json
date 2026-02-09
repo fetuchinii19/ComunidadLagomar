@@ -1,0 +1,217 @@
+{
+  "entities": {
+    "Resident": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Resident",
+      "type": "object",
+      "description": "Represents a resident in the community.",
+      "properties": {
+        "fullName": {
+          "type": "string",
+          "description": "The full name of the resident."
+        },
+        "houseNumber": {
+          "type": "string",
+          "description": "The house number where the resident lives."
+        },
+        "idNumber": {
+          "type": "string",
+          "description": "The resident's identity card number."
+        },
+        "age": {
+          "type": "number",
+          "description": "The age of the resident."
+        },
+        "profession": {
+          "type": "string",
+          "description": "The profession of the resident."
+        }
+      },
+      "required": [
+        "fullName",
+        "houseNumber",
+        "idNumber",
+        "age",
+        "profession"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "username": {
+          "type": "string",
+          "description": "The username of the user."
+        },
+        "roleId": {
+          "type": "string",
+          "description": "Reference to Role. (Relationship: Role 1:N User)"
+        },
+        "secret": {
+          "type": "string",
+          "description": "A secret key used only for initial admin user creation."
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "roleId"
+      ]
+    },
+    "Role": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Role",
+      "type": "object",
+      "description": "Represents a role within the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Role entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the role (e.g., Administrator, Moderator)."
+        },
+        "permissions": {
+          "type": "array",
+          "description": "A list of permissions granted to this role.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "permissions"
+      ]
+    },
+    "Report": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Report",
+      "type": "object",
+      "description": "Represents a generated report based on resident data.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Report entity."
+        },
+        "generatedDate": {
+          "type": "string",
+          "description": "The date and time when the report was generated.",
+          "format": "date-time"
+        },
+        "reportData": {
+          "type": "string",
+          "description": "The actual data of the report, potentially in JSON or another structured format."
+        },
+        "residentId": {
+          "type": "string",
+          "description": "Reference to Resident. (Relationship: Resident 1:N Report)"
+        }
+      },
+      "required": [
+        "id",
+        "generatedDate",
+        "reportData",
+        "residentId"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/residents/{residentId}",
+        "definition": {
+          "entityName": "Resident",
+          "schema": {
+            "$ref": "#/backend/entities/Resident"
+          },
+          "description": "Stores resident information. Includes personal details such as full name, house number, identity card number and age.  'residentId' is the unique identifier for each resident.",
+          "params": [
+            {
+              "name": "residentId",
+              "description": "Unique identifier for the resident."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user account information. 'userId' is the unique identifier for each user.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles/{roleId}",
+        "definition": {
+          "entityName": "Role",
+          "schema": {
+            "$ref": "#/backend/entities/Role"
+          },
+          "description": "Stores role definitions. 'roleId' is the unique identifier for each role.",
+          "params": [
+            {
+              "name": "roleId",
+              "description": "Unique identifier for the role."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/reports/{reportId}",
+        "definition": {
+          "entityName": "Report",
+          "schema": {
+            "$ref": "#/backend/entities/Report"
+          },
+          "description": "Stores generated reports. Includes denormalized 'residentId' for authorization independence. 'reportId' is the unique identifier for each report.",
+          "params": [
+            {
+              "name": "reportId",
+              "description": "Unique identifier for the report."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Collection to store UIDs of admin users. Existence of a document with a user's UID in this collection grants admin privileges.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The UID of the admin user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support the Community Connect application, focusing on storing resident information, user roles, and generated reports. It follows the principles of Authorization Independence, Structural Segregation, and Access Modeling to ensure security and scalability. Residents data is stored to collect, organize, and visualize basic information of community members. Users and Roles are stored separately for authentication and authorization. Reports are generated based on resident data and user-role access.\n\n**Authorization Independence:** Each document that requires role-based access (e.g., reports) includes the necessary authorization context (e.g., roles or user membership) directly within the document. This avoids the need for `get()` calls in security rules, ensuring atomic operations and simplifying security logic.\n\n**Structural Segregation:** Data with different access requirements are stored in separate collections. Public resident data might be stored separately from private reports. User profiles and role definitions are also segregated to maintain clear access control boundaries.\n\n**Access Modeling:** Path-based ownership is used for user-owned data (none explicitly defined but could be used for user-created content). The Membership Map pattern is used for collaborative data. Roles are managed using the Existence over Content pattern, with dedicated collections for admin roles. This combination provides a flexible and secure access control mechanism. The roles collection could be extended with additional roles as needed (e.g., `roles_moderator`).\n\n**QAPs Support:** The structure supports secure `list` operations (QAPs). By segregating data based on access requirements and denormalizing authorization information, security rules can efficiently filter data without relying on complex queries or `get()` calls."
+  }
+}

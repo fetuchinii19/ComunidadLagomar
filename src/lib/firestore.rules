@@ -1,0 +1,138 @@
+/**
+ * Core Philosophy: This ruleset implements a Role-Based Access Control (RBAC) model.
+ * A dedicated `/roles_admin` collection acts as the source of truth for granting
+ * administrative privileges. Admins have broad control over core data collections
+ * like residents and reports, while standard authenticated users can only manage
+ * their own user profile document.
+ *
+ * Data Structure: The data is organized into several top-level collections:
+ * - /users/{userId}: Private user profiles, managed only by the owner.
+ * - /residents/{residentId}: Community resident information, managed by admins.
+ * - /reports/{reportId}: Reports on residents, managed by admins.
+ * - /roles/{roleId}: System role definitions, readable by users but managed by admins.
+ * - /roles_admin/{userId}: A special collection where the existence of a document
+ *   grants a user administrative rights. This collection is not client-writable
+ *   except during the initial admin setup with a secret key.
+ *
+ * Key Security Decisions:
+ * - Admin-Centric Model: All major data collections (`residents`, `reports`) are
+ *   exclusively managed by users designated as admins.
+ * - User Data Isolation: Standard users are strictly confined to their own
+ *   `/users/{userId}` document. User enumeration via `list` is disabled for non-admins.
+ * - Secure Admin Granting: The `/roles_admin` collection is protected. New admins
+ *   can only be added by existing admins, or by a user providing a secret key during
+ *   initial setup. This prevents self-promotion.
+ * - Default Deny: All operations are denied unless explicitly permitted by a rule.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns true if the requesting user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the requesting user's UID matches the provided userId.
+     * Used to verify ownership of a resource.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    /**
+     * Returns true if the document being operated on already exists.
+     * Crucial for protecting against writes on non-existent paths.
+     */
+    function isExistingDoc() {
+      return resource != null;
+    }
+
+    /**
+     * Checks for admin privileges.
+     * An admin is defined by the existence of a document in the /roles_admin collection
+     * with the user's UID as the document ID.
+     */
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Manages resident information. Only admins can read or write this data.
+     * @path /residents/{residentId}
+     * @allow (get) An admin user can read a specific resident's document.
+     * @deny (list) A non-admin user cannot list all residents.
+     * @deny (create) A non-admin user cannot create a new resident document.
+     * @principle Enforces admin-only access for sensitive community data.
+     */
+    match /residents/{residentId} {
+      allow read, write: if isAdmin();
+    }
+
+    /**
+     * @description Stores individual user profiles. Users can create and manage their own profile. Admins can list users.
+     * @path /users/{userId}
+     * @allow (create) A new user can create their own user document at /users/THEIR_UID.
+     * @allow (get) An authenticated user can read their own profile.
+     * @allow (list) An admin can list all users to manage roles.
+     * @deny (update) A user cannot update another user's profile.
+     * @principle Restricts access to a user's own data tree (Ownership model), with admin oversight.
+     */
+    match /users/{userId} {
+      allow get, update, delete: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow list: if isAdmin();
+    }
+
+    /**
+     * @description Defines the roles available in the application (e.g., "Administrator").
+     * @path /roles/{roleId}
+     * @allow (list) Any authenticated user can list the available roles.
+     * @deny (create) A non-admin user cannot define a new role.
+     * @principle Allows public read access for system configuration data while protecting writes.
+     */
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    /**
+     * @description Stores generated reports. Only admins can create or view reports.
+     * @path /reports/{reportId}
+     * @allow (create) An admin can generate and save a new report.
+     * @deny (get) A standard user cannot read a report, even if they know its ID.
+     * @deny (delete) A standard user cannot delete any reports.
+     * @principle Enforces admin-only access for sensitive generated data.
+     */
+    match /reports/{reportId} {
+      allow read, write: if isAdmin();
+    }
+
+    /**
+     * @description A special collection to grant admin rights. Client-side writes are disabled
+     *              except for the initial setup with a secret or by an existing admin.
+     * @path /roles_admin/{userId}
+     * @allow (get) Any signed-in user's client code can check if another user is an admin.
+     * @allow (create) A user can make themselves an admin if they provide the secret, or an existing admin can promote another user.
+     * @principle Prevents client-side privilege escalation. Admin roles must be granted by a trusted party.
+     */
+    match /roles_admin/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isAdmin() || (isOwner(userId) && request.resource.data.secret == "32097140");
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
