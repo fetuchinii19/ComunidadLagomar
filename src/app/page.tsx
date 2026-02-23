@@ -3,7 +3,7 @@
 import { Users, Home, Activity } from 'lucide-react';
 import { StatCard } from '@/components/stat-card';
 import { PageHeader } from '@/components/page-header';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase/config';
 import { collection } from 'firebase/firestore';
 import type { Resident } from '@/app/lib/definitions';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,13 +21,9 @@ export default function Dashboard() {
     return null;
   }, [firestore, isAdmin]);
   
-  const { data: residents, isLoading: isResidentsLoading } = useCollection<Resident>(residentsCol);
-  
-  const totalResidents = residents?.length ?? 0;
-  const totalHouseholds = residents ? new Set(residents.map(r => r.houseNumber)).size : 0;
-  const averageAge = totalResidents > 0 && residents
-    ? Math.round(residents.reduce((acc, r) => acc + r.age, 0) / totalResidents)
-    : 0;
+ const { data: residents, isLoading: isResidentsLoading } = useCollection(residentsCol);
+  const totalResidents = residents?.length ?? 0;    const totalHouseholds = residents     ? new Set(residents.map((r: any) => r.houseNumber)).size     : 0;
+  const averageAge = totalResidents > 0 && residents    ? Math.round(residents.reduce((acc: number, r: any) => acc + (Number(r.age) || 0), 0) / totalResidents)    : 0;
 
   const isLoading = isAuthenticated && isResidentsLoading;
 

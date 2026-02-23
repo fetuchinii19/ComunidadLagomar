@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { PT_Sans } from 'next/font/google';
-import { cn } from '@/lib/utils';
+import { cn } from '@/app/lib/utils';
 import { Toaster } from '@/components/ui/toaster';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppHeader } from '@/components/app-header';
